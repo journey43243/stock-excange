@@ -11,14 +11,19 @@ from models import Transaction, L2OrderBook, Level, Instrument, UserRole, User, 
 import uvicorn
 from src.backend.database.orm import PublicORM
 import jwt
-app = FastAPI(openapi_url="/openapi.json")
-router = APIRouter(prefix='/api/v1')
+
+app = FastAPI()
+public_router = APIRouter(prefix='/api/v1')
+balance_router = APIRouter(prefix='/api/v1')
+order_router = APIRouter(prefix='/api/v1')
+admin_router = APIRouter(prefix='/api/v1')
+user_router = APIRouter(prefix='/api/v1')
 
 
-@cbv(router)
-class CBV:
+@cbv(public_router)
+class PublicCBV:
 
-    @router.post("/public/register", response_model=User, tags=["public"])
+    @public_router.post("/public/register", response_model=User, tags=["public"])
     async def register(self, new_user: NewUser):
         """Регистрация пользователя"""
         # Реализация регистрации
@@ -30,14 +35,14 @@ class CBV:
             api_key=user[1]
         )
 
-    @router.get("/public/instrument", response_model=List[Instrument], tags=["public"])
+    @public_router.get("/public/instrument", response_model=List[Instrument], tags=["public"])
     async def list_instruments(self):
         response = []
         for i in await PublicORM.select_instruments():
             response.append(Instrument(name=i.name, ticker=i.ticker))
         return response
 
-    @router.get("/public/orderbook/{ticker}", response_model=L2OrderBook, tags=["public"])
+    @public_router.get("/public/orderbook/{ticker}", response_model=L2OrderBook, tags=["public"])
     async def get_orderbook(self, ticker: str, limit=10):
         bid_levels = []
         ask_levels = []
@@ -51,7 +56,10 @@ class CBV:
             ask_levels=ask_levels
         )
 
-    @router.get("/public/transactions/{ticker}", response_model=List[Transaction], tags=["public"])
+
+@cbv(balance_router)
+class BalanceCBV:
+    @balance_router.get("/public/transactions/{ticker}", response_model=List[Transaction], tags=["public"])
     async def get_transaction_history(self, ticker: str, limit=10):
         """История сделок"""
         return [Transaction(
@@ -62,13 +70,17 @@ class CBV:
         ) for i in await PublicORM.transactions(ticker, limit)]
 
     # --- Balance Endpoints ---
-    @router.get("/balance", tags=["balance"])
+    @balance_router.get("/balance", tags=["balance"])
     async def get_balances(self, authorization: Optional[str] = Header(None)) -> Dict[str, int]:
         """Получить балансы"""
         return {"MEMCOIN": 0, "DODGE": 100500}
 
+
+@cbv(order_router)
+class OrderCBV:
+
     # --- Order Endpoints ---
-    @router.post("/order", response_model=CreateOrderResponse, tags=["order"])
+    @order_router.post("/order", response_model=CreateOrderResponse, tags=["order"])
     async def create_order(self,
                            order: LimitOrderBody | MarketOrderBody,
                            authorization: Optional[str] = Header(None)
@@ -76,23 +88,29 @@ class CBV:
         """Создать ордер"""
         return CreateOrderResponse(order_id="35b0884d-9a1d-47b0-91c7-eecf0ca56bc8")
 
-    @router.get("/order", response_model=List[LimitOrder | MarketOrder], tags=["order"])
+    @order_router.get("/order", response_model=List[LimitOrder | MarketOrder], tags=["order"])
     async def list_orders(self, authorization: Optional[str] = Header(None)):
         """Список ордеров"""
         return []
 
-    @router.get("/order/{order_id}", response_model=LimitOrder | MarketOrder, tags=["order"])
+    @order_router.get("/order/{order_id}", response_model=LimitOrder | MarketOrder, tags=["order"])
     async def get_order(self, order_id: UUID4, authorization: Optional[str] = Header(None)):
         """Получить ордер"""
         raise HTTPException(status_code=404, detail="Order not found")
 
-    @router.delete("/order/{order_id}", response_model=Ok, tags=["order"])
+    @order_router.delete("/order/{order_id}", response_model=Ok, tags=["order"])
     async def cancel_order(self, order_id: UUID4, authorization: Optional[str] = Header(None)):
         """Отменить ордер"""
         return Ok()
 
+
+cbv(admin_router)
+
+
+class AdminCBV:
+
     # --- Admin Endpoints ---
-    @router.delete("/admin/user/{user_id}", response_model=User, tags=["admin", "user"])
+    @admin_router.delete("/admin/user/{user_id}", response_model=User, tags=["admin", "user"])
     async def delete_user(self, user_id: UUID4, authorization: Optional[str] = Header(None)):
         """Удалить пользователя"""
         return User(
@@ -102,19 +120,19 @@ class CBV:
             api_key=""
         )
 
-    @router.post("/admin/instrument", response_model=Ok, tags=["admin"])
+    @admin_router.post("/admin/instrument", response_model=Ok, tags=["admin"])
     async def add_instrument(self,
                              instrument: Instrument,
                              authorization: Optional[str] = Header(None)):
         """Добавить инструмент"""
         return Ok()
 
-    @router.delete("/admin/instrument/{ticker}", response_model=Ok, tags=["admin"])
+    @admin_router.delete("/admin/instrument/{ticker}", response_model=Ok, tags=["admin"])
     async def delete_instrument(self, ticker: str, authorization: Optional[str] = Header(None)):
         """Удалить инструмент"""
         return Ok()
 
-    @router.post("/admin/balance/deposit", response_model=Ok, tags=["admin", "balance"])
+    @admin_router.post("/admin/balance/deposit", response_model=Ok, tags=["admin", "balance"])
     async def deposit(self,
                       user_id: UUID4,
                       ticker: str,
@@ -123,18 +141,20 @@ class CBV:
         """Пополнение баланса"""
         return Ok()
 
-        @router.post("/admin/balance/withdraw", response_model=Ok, tags=["admin", "balance"])
-        async def withdraw(
-                user_id: UUID4,
-                ticker: str,
-                amount: int,
-                authorization: Optional[str] = Header(None)):
-            """Вывод средств"""
-            return Ok()
+    @admin_router.post("/admin/balance/withdraw", response_model=Ok, tags=["admin", "balance"])
+    async def withdraw(
+            user_id: UUID4,
+            ticker: str,
+            amount: int,
+            authorization: Optional[str] = Header(None)):
+        """Вывод средств"""
+        return Ok()
 
 
-
-app.include_router(router)
+app.include_router(public_router)
+app.include_router(admin_router)
+app.include_router(balance_router)
+app.include_router(order_router)
 
 if __name__ == "__main__":
     uvicorn.run("src.backend.server.api:app", host='0.0.0.0', port=8000, reload=True)
