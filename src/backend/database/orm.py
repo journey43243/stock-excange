@@ -217,6 +217,13 @@ class OrderORM:
                 await session.execute(stmt)
                 await session.commit()
 
+    @classmethod
+    async def orders_list(cls):
+        stmt = select(Order)
+        async with session_var() as session:
+            query = await session.execute(stmt)
+        return query.scalars()
+
 class AuthORM:
     @classmethod
     async def verify_token_orm(cls, token):

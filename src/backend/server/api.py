@@ -5,8 +5,10 @@ from typing import List, Optional, Dict
 from fastapi import FastAPI, APIRouter, Header, HTTPException, Depends, Request
 from fastapi_restful.cbv import cbv
 from pydantic import UUID4
+from sqlalchemy import inspect
+
 from models import Transaction, L2OrderBook, Level, Instrument, UserRole, User, NewUser, \
-    CreateOrderResponse, LimitOrderBody, MarketOrder, LimitOrder, MarketOrderBody, Ok
+    CreateOrderResponse, LimitOrderBody, MarketOrder, LimitOrder, MarketOrderBody, Ok, Direction
 import uvicorn
 from src.backend.database.orm import PublicORM, AuthORM, BalanceORM, AdminORM, OrderORM
 
@@ -105,9 +107,22 @@ class OrderCBV:
 
     @order_router.get("/order", response_model=List[LimitOrder | MarketOrder], tags=["order"])
     async def list_orders(self):
-        """Список ордеров"""
-        return []
-
+        query = await OrderORM.orders_list()
+        response = []
+        for order in query:
+            if getattr(order, "price") and order.price is not None:
+                attrs = {c.key: getattr(order, c.key) for c in inspect(order).mapper.column_attrs}
+                body = LimitOrderBody(**attrs)
+                attrs["body"] = body
+                entry = LimitOrder(**attrs)
+                response.append(entry)
+            else:
+                attrs = {c.key: getattr(order, c.key) for c in inspect(order).mapper.column_attrs}
+                body = MarketOrderBody(**attrs)
+                attrs["body"] = body
+                entry = MarketOrder(**attrs)
+                response.append(entry)
+        return response
     @order_router.get("/order/{order_id}", response_model=LimitOrder | MarketOrder, tags=["order"])
     async def get_order(self, order_id: UUID4):
         """Получить ордер"""
@@ -137,7 +152,6 @@ class AdminCBV:
     @admin_router.post("/admin/instrument", response_model=Ok, tags=["admin"])
     async def add_instrument(self,
                              instrument: Instrument):
-
         await AdminORM.add_instrument(instrument.ticker, instrument.name)
         return Ok()
 
