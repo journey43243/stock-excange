@@ -9,7 +9,7 @@ from starlette.requests import Request
 from models import Transaction, L2OrderBook, Level, Instrument, UserRole, User, NewUser, \
     CreateOrderResponse, LimitOrderBody, MarketOrder, LimitOrder, MarketOrderBody, Ok
 import uvicorn
-from src.backend.database.orm import UserORM
+from src.backend.database.orm import PublicORM
 import jwt
 app = FastAPI(openapi_url="/openapi.json")
 router = APIRouter(prefix='/api/v1')
@@ -22,7 +22,7 @@ class CBV:
     async def register(self, new_user: NewUser):
         """Регистрация пользователя"""
         # Реализация регистрации
-        user = await UserORM.registration(new_user)
+        user = await PublicORM.registration(new_user)
         return User(
             id=user[2],
             name=user[0].name,
@@ -33,29 +33,33 @@ class CBV:
     @router.get("/public/instrument", response_model=List[Instrument], tags=["public"])
     async def list_instruments(self):
         response = []
-        for i in await UserORM.select_instruments():
+        for i in await PublicORM.select_instruments():
             response.append(Instrument(name=i.name, ticker=i.ticker))
         return response
 
     @router.get("/public/orderbook/{ticker}", response_model=L2OrderBook, tags=["public"])
-    async def get_orderbook(self, ticker: str, limit: int = 10):
-        response = []
-        for i in await UserORM.select_active_orders():
-            response.append(Level(price=i.cost, qty=i.quantity))
+    async def get_orderbook(self, ticker: str, limit=10):
+        bid_levels = []
+        ask_levels = []
+        for i in await PublicORM.select_orderbook(ticker, limit):
+            if i.is_bid:
+                bid_levels.append(Level(price=i.cost, qty=i.qty))
+            else:
+                ask_levels.append(Level(price=i.cost, qty=i.qty))
         return L2OrderBook(
-            bid_levels=[Level(price=100, qty=5)],
-            ask_levels=[Level(price=105, qty=3)]
+            bid_levels=bid_levels,
+            ask_levels=ask_levels
         )
 
     @router.get("/public/transactions/{ticker}", response_model=List[Transaction], tags=["public"])
-    async def get_transaction_history(self, ticker: str, limit: int = 10):
+    async def get_transaction_history(self, ticker: str, limit=10):
         """История сделок"""
         return [Transaction(
-            ticker=ticker,
-            amount=1,
-            price=100,
-            timestamp=datetime.now()
-        )]
+            ticker=i.ticker,
+            amount=i.amount,
+            price=i.ptice,
+            timestamp=i.timestamp
+        ) for i in await PublicORM.transactions(ticker, limit)]
 
     # --- Balance Endpoints ---
     @router.get("/balance", tags=["balance"])
