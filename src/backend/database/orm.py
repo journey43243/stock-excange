@@ -88,15 +88,16 @@ class AdminORM:
             stmt = select(Balance).where(
                 and_(Balance.user_id == bindparam("user_id", type_=UUID), Balance.ticker == bindparam("ticker")))
             query = await session.execute(stmt, {"user_id": user_id, "ticker": ticker})
-            if temp := query.scalars().one_or_none() is None:
+            user = query.scalars().first()
+            if user is None:
                 stmt = insert(Balance).values(
                     [{"user_id": bindparam("user_id", type_=UUID), "ticker": bindparam("ticker"),
                       "amount": bindparam("amount")}])
                 await session.execute(stmt, {"user_id": user_id, "ticker": ticker, "amount": amount})
             else:
                 stmt = update(Balance).where(
-                    and_(Balance.user_id == temp.user_id, Balance.ticker == temp.ticker)).values(
-                    amount=temp.amount + amount)
+                    and_(Balance.user_id == user.user_id, Balance.ticker == user.ticker)).values(
+                    amount=user.amount + amount)
                 await session.execute(stmt)
             await session.commit()
 
@@ -106,7 +107,7 @@ class AdminORM:
             stmt = select(Balance).where(and_(Balance.user_id == bindparam("user_id", type_=UUID),
                                               Balance.ticker == bindparam("ticker", type_=String())))
             query = await session.execute(stmt, {"user_id": user_id, "ticker": ticker})
-            temp = query.scalars().one_or_none()
+            temp = query.scalars().first()
             if temp and temp.amount - amount >= 0:
                 stmt = update(Balance).where(
                     and_(Balance.user_id == temp.user_id, Balance.ticker == temp.ticker)).values(
@@ -133,6 +134,17 @@ class AdminORM:
         async with session_var() as session:
             await session.execute(stmt, {"ticker": ticker})
             await session.commit()
+
+    @classmethod
+    async def delete_user(cls, user_id):
+        stmt = select(User).where(User.id == bindparam("id", type_=UUID))
+        async with session_var() as session:
+            user = await session.execute(stmt, {"id": user_id})
+            if temp := user.scalars().one_or_none():
+                stmt = delete(User).where(User.id == bindparam("id", type_=UUID))
+                await session.execute(stmt, {"id": user_id})
+                await session.commit()
+        return temp
 
 
 class AuthORM:

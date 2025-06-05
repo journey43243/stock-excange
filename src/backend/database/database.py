@@ -72,7 +72,8 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(SQLEnum(UserRole), default=UserRole.USER)
 
     orders: Mapped[List["Order"]] = relationship("Order", back_populates="user")
-    balances: Mapped[List["Balance"]] = relationship("Balance", back_populates="user")
+    balances: Mapped[List["Balance"]] = relationship("Balance", back_populates="user", cascade="all, delete-orphan",
+        passive_deletes=True)
 
 
 class Instrument(Base):
@@ -89,7 +90,7 @@ class Instrument(Base):
 class Balance(Base):
     __tablename__ = "balance"
 
-    user_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("user_account.id", ondelete="NO ACTION"), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("user_account.id", ondelete="CASCADE"), primary_key=True)
     ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker", ondelete="CASCADE"), primary_key=True)
     amount: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -110,8 +111,8 @@ class Order(Base):
 
     price: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
-    user_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("user_account.id"))
-    ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker"))
+    user_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("user_account.id", ondelete="CASCADE"))
+    ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker", ondelete="CASCADE"))
 
     user: Mapped["User"] = relationship("User", back_populates="orders")
     instrument: Mapped["Instrument"] = relationship("Instrument", back_populates="orders")
@@ -126,7 +127,7 @@ class Transaction(Base):
     price: Mapped[int] = mapped_column(Integer)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker"))
+    ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker", ondelete="CASCADE"))
     order_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("order.id"))
 
     instrument: Mapped["Instrument"] = relationship("Instrument", back_populates="transactions")
@@ -142,6 +143,6 @@ class OrderBookLevel(Base):
     is_bid: Mapped[bool] = mapped_column(Boolean)  # True для bid, False для ask
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker"))
+    ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker", ondelete="CASCADE"))
 
     instrument: Mapped["Instrument"] = relationship("Instrument")

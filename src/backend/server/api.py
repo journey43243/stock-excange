@@ -126,11 +126,12 @@ class AdminCBV:
     @admin_router.delete("/admin/user/{user_id}", response_model=User, tags=["admin", "user"])
     async def delete_user(self, user_id: UUID4):
         """Удалить пользователя"""
+        user = await AdminORM.delete_user(user_id)
         return User(
             id=user_id,
-            name="Deleted User",
-            role=UserRole.USER,
-            api_key=""
+            name=user.name,
+            role=user.role,
+            api_key=user.api_key
         )
 
     @admin_router.post("/admin/instrument", response_model=Ok, tags=["admin"])
