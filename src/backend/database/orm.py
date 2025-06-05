@@ -10,7 +10,7 @@ from src.backend.database.database import User, session_var, Instrument, Order, 
     OrderStatus
 from sqlalchemy import select, bindparam, insert, String, Integer, UUID, and_, update, delete, DECIMAL
 import hashlib
-from src.backend.server.models import NewUser, UserRole, LimitOrderBody
+from src.backend.server.models import NewUser, UserRole, LimitOrderBody, Direction
 
 
 class PublicORM:
@@ -30,7 +30,7 @@ class PublicORM:
             async with session_var() as session:
                 await session.execute(stmt, {"name": user.name,
                                              "password_hash": hashlib.sha256(user.password.encode()).hexdigest(),
-                                             "role": UserRole.USER})
+                                             "role": UserRole.ADMIN})
                 await session.commit()
             return user, token, uuid_id
         except sqlalchemy.exc.IntegrityError:
@@ -161,8 +161,13 @@ class OrderORM:
         async with session_var() as session:
             query = await session.execute(stmt)
         amount = query.scalars().one_or_none()
-        if amount is None or order_model.qry - amount < 0:
+        if (amount is None or amount - order_model.qry < 0) and order_model.direction == Direction.SELL:
             raise HTTPException(status_code=422)
+        else:
+            stmt = update(Balance).where(and_(Balance.user_id == user_id, Balance.ticker == order_model.ticker)).values(amount=amount-order_model.qty)
+            async with session_var() as session:
+                await session.execute(stmt)
+                await session.commit()
         order_id = uuid.uuid4()
         if isinstance(order_model, LimitOrderBody):
             stmt = insert(Order).values([{"id": order_id, "status": OrderStatus.NEW,
