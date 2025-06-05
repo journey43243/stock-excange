@@ -2,22 +2,30 @@ import os
 from datetime import datetime
 from typing import List, Optional, Dict
 
-from fastapi import FastAPI, APIRouter, Header, HTTPException
+from fastapi import FastAPI, APIRouter, Header, HTTPException, Depends
 from fastapi_restful.cbv import cbv
 from pydantic import UUID4
-from starlette.requests import Request
 from models import Transaction, L2OrderBook, Level, Instrument, UserRole, User, NewUser, \
     CreateOrderResponse, LimitOrderBody, MarketOrder, LimitOrder, MarketOrderBody, Ok
 import uvicorn
-from src.backend.database.orm import PublicORM
-import jwt
+from src.backend.database.orm import PublicORM, verify_token_orm
+
+
+
+async def verify_user_token(authorization: str = Header(...)):
+    if authorization:
+        res = await verify_token_orm(authorization)
+        if res:
+            return True
+        raise HTTPException(status_code=401)
+
 
 app = FastAPI()
 public_router = APIRouter(prefix='/api/v1')
-balance_router = APIRouter(prefix='/api/v1')
-order_router = APIRouter(prefix='/api/v1')
+balance_router = APIRouter(prefix='/api/v1', dependencies=[Depends(verify_user_token)])
+order_router = APIRouter(prefix='/api/v1', dependencies=[Depends(verify_user_token)])
 admin_router = APIRouter(prefix='/api/v1')
-user_router = APIRouter(prefix='/api/v1')
+user_router = APIRouter(prefix='/api/v1', dependencies=[Depends(verify_user_token)])
 
 
 @cbv(public_router)
@@ -56,10 +64,7 @@ class PublicCBV:
             ask_levels=ask_levels
         )
 
-
-@cbv(balance_router)
-class BalanceCBV:
-    @balance_router.get("/public/transactions/{ticker}", response_model=List[Transaction], tags=["public"])
+    @public_router.get("/public/transactions/{ticker}", response_model=List[Transaction], tags=["public"])
     async def get_transaction_history(self, ticker: str, limit=10):
         """История сделок"""
         return [Transaction(
@@ -69,9 +74,13 @@ class BalanceCBV:
             timestamp=i.timestamp
         ) for i in await PublicORM.transactions(ticker, limit)]
 
+
+@cbv(balance_router)
+class BalanceCBV:
+
     # --- Balance Endpoints ---
     @balance_router.get("/balance", tags=["balance"])
-    async def get_balances(self, authorization: Optional[str] = Header(None)) -> Dict[str, int]:
+    async def get_balances(self) -> Dict[str, int]:
         """Получить балансы"""
         return {"MEMCOIN": 0, "DODGE": 100500}
 
@@ -104,9 +113,9 @@ class OrderCBV:
         return Ok()
 
 
-cbv(admin_router)
 
 
+@cbv(admin_router)
 class AdminCBV:
 
     # --- Admin Endpoints ---
@@ -142,11 +151,11 @@ class AdminCBV:
         return Ok()
 
     @admin_router.post("/admin/balance/withdraw", response_model=Ok, tags=["admin", "balance"])
-    async def withdraw(
-            user_id: UUID4,
-            ticker: str,
-            amount: int,
-            authorization: Optional[str] = Header(None)):
+    async def withdraw(self,
+                       user_id: UUID4,
+                       ticker: str,
+                       amount: int,
+                       authorization: Optional[str] = Header(None)):
         """Вывод средств"""
         return Ok()
 

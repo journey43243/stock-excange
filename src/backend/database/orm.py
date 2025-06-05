@@ -60,3 +60,10 @@ class PublicORM:
         async with session_var() as session:
             query = await session.execute(stmt, {"limit": int(limit), "ticker": ticker})
         return query.scalars()
+
+
+async def verify_token_orm(token):
+    stmt = select(User).where(User.api_key == bindparam("token"))
+    async with session_var() as session:
+        query = await session.execute(stmt, {"token": token})
+    return query.scalars().one_or_none()
