@@ -6,7 +6,7 @@ import sqlalchemy.exc
 from fastapi import HTTPException
 
 from src.backend.database.database import User, session_var, Instrument, Order, OrderBookLevel, Transaction, Balance
-from sqlalchemy import select, bindparam, insert, String, Integer, UUID, and_, update
+from sqlalchemy import select, bindparam, insert, String, Integer, UUID, and_, update, delete
 import hashlib
 from src.backend.server.models import NewUser, UserRole
 
@@ -89,11 +89,10 @@ class AdminORM:
                 and_(Balance.user_id == bindparam("user_id", type_=UUID), Balance.ticker == bindparam("ticker")))
             query = await session.execute(stmt, {"user_id": user_id, "ticker": ticker})
             if temp := query.scalars().one_or_none() is None:
-                stmt = insert(Balance).values([{"user_id": bindparam("user_id", type_=UUID), "ticker": bindparam("ticker"),
-                                                "amount": bindparam("amount"),
-                                                "user": user,
-                                                "instrument": instrument}])
-                session.execute(stmt, {"user_id": user_id, "ticker": ticker, "amount": amount})
+                stmt = insert(Balance).values(
+                    [{"user_id": bindparam("user_id", type_=UUID), "ticker": bindparam("ticker"),
+                      "amount": bindparam("amount")}])
+                await session.execute(stmt, {"user_id": user_id, "ticker": ticker, "amount": amount})
             else:
                 stmt = update(Balance).where(
                     and_(Balance.user_id == temp.user_id, Balance.ticker == temp.ticker)).values(
@@ -116,6 +115,24 @@ class AdminORM:
                 await session.commit()
             else:
                 raise HTTPException(status_code=422)
+
+    @classmethod
+    async def add_instrument(cls, ticker, name):
+        stmt = insert(Instrument).values(
+            [{"ticker": bindparam("ticker", type_=String()), "name": bindparam("name", type_=String())}])
+        async with session_var() as session:
+            try:
+                await session.execute(stmt, {"name": name, "ticker": ticker})
+                await session.commit()
+            except sqlalchemy.exc.IntegrityError:
+                raise HTTPException(status_code=422)
+
+    @classmethod
+    async def delete_instrument(cls, ticker):
+        stmt = delete(Instrument).where(Instrument.ticker == bindparam("ticker", type_=String()))
+        async with session_var() as session:
+            await session.execute(stmt, {"ticker": ticker})
+            await session.commit()
 
 
 class AuthORM:

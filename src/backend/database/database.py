@@ -17,7 +17,6 @@ from src.backend.server.models import UserRole
 
 
 class Settings(BaseSettings):
-
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_PORT: int
@@ -26,7 +25,7 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL_psycopg(self):
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}" +\
+        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}" + \
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     model_config = SettingsConfigDict(env_file="src/config/.env", extra="ignore")
@@ -41,11 +40,11 @@ engine_pg = create_async_engine(
     max_overflow=15
 )
 
-
 session_var = async_sessionmaker(engine_pg, class_=AsyncSession,
                                  expire_on_commit=False)
 
 metadata = MetaData()
+
 
 class Base(DeclarativeBase):
     pass
@@ -83,19 +82,19 @@ class Instrument(Base):
     name: Mapped[str] = mapped_column(String(64))
 
     orders: Mapped[List["Order"]] = relationship("Order", back_populates="instrument")
-    transactions: Mapped[List["Transaction"]] = relationship("Transaction", back_populates="instrument")
+    transactions: Mapped[List["Transaction"]] = relationship("Transaction", back_populates="instrument",
+                                                             )
 
 
 class Balance(Base):
     __tablename__ = "balance"
 
-    user_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("user_account.id"), primary_key=True)
-    ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker"), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("user_account.id", ondelete="NO ACTION"), primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker", ondelete="CASCADE"), primary_key=True)
     amount: Mapped[int] = mapped_column(Integer, default=0)
 
     user: Mapped["User"] = relationship("User", back_populates="balances")
     instrument: Mapped["Instrument"] = relationship("Instrument")
-
 
 
 class Order(Base):

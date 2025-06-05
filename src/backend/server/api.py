@@ -99,24 +99,22 @@ class OrderCBV:
     # --- Order Endpoints ---
     @order_router.post("/order", response_model=CreateOrderResponse, tags=["order"])
     async def create_order(self,
-                           order: LimitOrderBody | MarketOrderBody,
-                           authorization: Optional[str] = Header(None)
-                           ):
+                           order: LimitOrderBody | MarketOrderBody):
         """Создать ордер"""
         return CreateOrderResponse(order_id="35b0884d-9a1d-47b0-91c7-eecf0ca56bc8")
 
     @order_router.get("/order", response_model=List[LimitOrder | MarketOrder], tags=["order"])
-    async def list_orders(self, authorization: Optional[str] = Header(None)):
+    async def list_orders(self):
         """Список ордеров"""
         return []
 
     @order_router.get("/order/{order_id}", response_model=LimitOrder | MarketOrder, tags=["order"])
-    async def get_order(self, order_id: UUID4, authorization: Optional[str] = Header(None)):
+    async def get_order(self, order_id: UUID4):
         """Получить ордер"""
         raise HTTPException(status_code=404, detail="Order not found")
 
     @order_router.delete("/order/{order_id}", response_model=Ok, tags=["order"])
-    async def cancel_order(self, order_id: UUID4, authorization: Optional[str] = Header(None)):
+    async def cancel_order(self, order_id: UUID4):
         """Отменить ордер"""
         return Ok()
 
@@ -126,7 +124,7 @@ class AdminCBV:
 
     # --- Admin Endpoints ---
     @admin_router.delete("/admin/user/{user_id}", response_model=User, tags=["admin", "user"])
-    async def delete_user(self, user_id: UUID4, authorization: Optional[str] = Header(None)):
+    async def delete_user(self, user_id: UUID4):
         """Удалить пользователя"""
         return User(
             id=user_id,
@@ -137,14 +135,14 @@ class AdminCBV:
 
     @admin_router.post("/admin/instrument", response_model=Ok, tags=["admin"])
     async def add_instrument(self,
-                             instrument: Instrument,
-                             authorization: Optional[str] = Header(None)):
-        """Добавить инструмент"""
+                             instrument: Instrument):
+
+        await AdminORM.add_instrument(instrument.ticker, instrument.name)
         return Ok()
 
     @admin_router.delete("/admin/instrument/{ticker}", response_model=Ok, tags=["admin"])
-    async def delete_instrument(self, ticker: str, authorization: Optional[str] = Header(None)):
-        """Удалить инструмент"""
+    async def delete_instrument(self, ticker: str):
+        await AdminORM.delete_instrument(ticker)
         return Ok()
 
     @admin_router.post("/admin/balance/deposit", response_model=Ok, tags=["admin", "balance"])
@@ -160,9 +158,9 @@ class AdminCBV:
     async def withdraw(self,
                        user_id: UUID4,
                        ticker: str,
-                       amount: int,
-                       authorization: Optional[str] = Header(None)):
+                       amount: int):
         """Вывод средств"""
+        await AdminORM.do_withdraw(user_id, ticker, amount)
         return Ok()
 
 
