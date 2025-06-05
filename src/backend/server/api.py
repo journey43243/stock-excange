@@ -8,7 +8,7 @@ from pydantic import UUID4
 from models import Transaction, L2OrderBook, Level, Instrument, UserRole, User, NewUser, \
     CreateOrderResponse, LimitOrderBody, MarketOrder, LimitOrder, MarketOrderBody, Ok
 import uvicorn
-from src.backend.database.orm import PublicORM, AuthORM, BalanceORM
+from src.backend.database.orm import PublicORM, AuthORM, BalanceORM, AdminORM
 
 
 async def verify_user_token(authorization: str = Header(...)):
@@ -19,11 +19,19 @@ async def verify_user_token(authorization: str = Header(...)):
         raise HTTPException(status_code=401)
 
 
+async def verify_admin_token(authorization: str = Header(...)):
+    if authorization:
+        res = await AuthORM.verify_admin_token_orm(authorization)
+        if res:
+            return True
+        raise HTTPException(status_code=401)
+
+
 app = FastAPI()
 public_router = APIRouter(prefix='/api/v1')
 balance_router = APIRouter(prefix='/api/v1', dependencies=[Depends(verify_user_token)])
 order_router = APIRouter(prefix='/api/v1', dependencies=[Depends(verify_user_token)])
-admin_router = APIRouter(prefix='/api/v1')
+admin_router = APIRouter(prefix='/api/v1', dependencies=[Depends(verify_admin_token)])
 user_router = APIRouter(prefix='/api/v1', dependencies=[Depends(verify_user_token)])
 
 
@@ -113,8 +121,6 @@ class OrderCBV:
         return Ok()
 
 
-
-
 @cbv(admin_router)
 class AdminCBV:
 
@@ -145,9 +151,8 @@ class AdminCBV:
     async def deposit(self,
                       user_id: UUID4,
                       ticker: str,
-                      amount: int,
-                      authorization: Optional[str] = Header(None)):
-        """Пополнение баланса"""
+                      amount: int):
+        await AdminORM.do_deposit(user_id, ticker, amount)
 
         return Ok()
 

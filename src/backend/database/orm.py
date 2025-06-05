@@ -6,7 +6,7 @@ import sqlalchemy.exc
 from fastapi import HTTPException
 
 from src.backend.database.database import User, session_var, Instrument, Order, OrderBookLevel, Transaction, Balance
-from sqlalchemy import select, bindparam, insert, String, Integer
+from sqlalchemy import select, bindparam, insert, String, Integer, UUID, and_, update
 import hashlib
 from src.backend.server.models import NewUser, UserRole
 
@@ -68,8 +68,54 @@ class BalanceORM:
             user_id = query.scalars().first()
             stmt = select(Balance).where(Balance.user_id == user_id)
             query = await session.execute(stmt)
+        print(query.scalars())
         return query.scalars()
 
+
+class AdminORM:
+    @classmethod
+    async def do_deposit(cls, user_id, ticker, amount):
+        async with session_var() as session:
+            stmt = select(User).where(User.id == bindparam("id", type_=UUID))
+            query = await session.execute(stmt, {"id": user_id})
+            user = query.scalars().one_or_none()
+
+            stmt = select(Instrument).where(Instrument.ticker == bindparam("ticker", type_=String()))
+            query = await session.execute(stmt, {"ticker": ticker})
+            instrument = query.scalars().one_or_none()
+            if instrument is None or user is None:
+                raise HTTPException(status_code=422)
+            stmt = select(Balance).where(
+                and_(Balance.user_id == bindparam("user_id", type_=UUID), Balance.ticker == bindparam("ticker")))
+            query = await session.execute(stmt, {"user_id": user_id, "ticker": ticker})
+            if temp := query.scalars().one_or_none() is None:
+                stmt = insert(Balance).values([{"user_id": bindparam("user_id", type_=UUID), "ticker": bindparam("ticker"),
+                                                "amount": bindparam("amount"),
+                                                "user": user,
+                                                "instrument": instrument}])
+                session.execute(stmt, {"user_id": user_id, "ticker": ticker, "amount": amount})
+            else:
+                stmt = update(Balance).where(
+                    and_(Balance.user_id == temp.user_id, Balance.ticker == temp.ticker)).values(
+                    amount=temp.amount + amount)
+                await session.execute(stmt)
+            await session.commit()
+
+    @classmethod
+    async def do_withdraw(cls, user_id, ticker, amount):
+        async with session_var() as session:
+            stmt = select(Balance).where(and_(Balance.user_id == bindparam("user_id", type_=UUID),
+                                              Balance.ticker == bindparam("ticker", type_=String())))
+            query = await session.execute(stmt, {"user_id": user_id, "ticker": ticker})
+            temp = query.scalars().one_or_none()
+            if temp and temp.amount - amount >= 0:
+                stmt = update(Balance).where(
+                    and_(Balance.user_id == temp.user_id, Balance.ticker == temp.ticker)).values(
+                    amount=temp.amount - amount)
+                await session.execute(stmt)
+                await session.commit()
+            else:
+                raise HTTPException(status_code=422)
 
 
 class AuthORM:
@@ -78,4 +124,11 @@ class AuthORM:
         stmt = select(User).where(User.api_key == bindparam("token"))
         async with session_var() as session:
             query = await session.execute(stmt, {"token": token})
+        return query.scalars().one_or_none()
+
+    @classmethod
+    async def verify_admin_token_orm(cls, token):
+        stmt = select(User).where(and_(User.api_key == bindparam("api_key")), User.role == UserRole.ADMIN)
+        async with session_var() as session:
+            query = await session.execute(stmt, {"api_key": token})
         return query.scalars().one_or_none()
