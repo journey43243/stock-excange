@@ -47,18 +47,20 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "user_account"
 
-    id: Mapped[str] = mapped_column(primary_key=True, default=uuid.uuid4())
+    id: Mapped[str] = mapped_column(UUID(), primary_key=True, default=uuid.uuid4())
     username: Mapped[str] = mapped_column(String(64))
     password: Mapped[str] = mapped_column(String(64))
     token: Mapped[str] = mapped_column(String(128))
+    role: Mapped[str] = mapped_column(String(6))
     orders: Mapped[List["Order"]] = relationship(back_populates="user")
 
 class Order(Base):
     __tablename__ = "order"
 
-    id: Mapped[str] = mapped_column(primary_key=True, default=uuid.uuid4())
+    id: Mapped[str] = mapped_column(UUID(), primary_key=True, default=uuid.uuid4())
     status: Mapped[bool] = mapped_column(Boolean())
     type: Mapped[int] = mapped_column(Integer())
     cost: Mapped[float] = mapped_column(DECIMAL())
     user_id = mapped_column(ForeignKey("user_account.id"))
-    user: Mapped["User"] = relationship("User", back_populates="order")
+    user: Mapped["User"] = relationship("User", back_populates="orders")
+

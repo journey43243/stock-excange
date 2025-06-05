@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from typing import List, Optional, Dict
 
@@ -8,7 +9,8 @@ from starlette.requests import Request
 from models import Transaction, L2OrderBook, Level, Instrument, UserRole, User, NewUser, \
     CreateOrderResponse, LimitOrderBody, MarketOrder, LimitOrder, MarketOrderBody, Ok
 import uvicorn
-
+from src.backend.database.orm import UserORM
+import jwt
 app = FastAPI(openapi_url="/openapi.json")
 router = APIRouter(prefix='/api/v1')
 
@@ -20,11 +22,12 @@ class CBV:
     async def register(self, new_user: NewUser):
         """Регистрация пользователя"""
         # Реализация регистрации
+        user = await UserORM.registration(new_user)
         return User(
-            id="35b0884d-9a1d-47b0-91c7-eecf0ca56bc8",
-            name=new_user.name,
+            id=user[2],
+            name=user[0].name,
             role=UserRole.USER,
-            api_key="key-bee6de4d-7a23-4bb1-a048-523c2ef0ea0c"
+            api_key=user[1]
         )
 
     @router.get("/public/instrument", response_model=List[Instrument], tags=["public"])
@@ -121,11 +124,6 @@ class CBV:
             """Вывод средств"""
             return Ok()
 
-@app.middleware("http")
-async def auth_middleware(request: Request, call_next):
-    api_key = request.headers['Authorization']
-    response = await call_next(request)
-    return response
 
 
 app.include_router(router)
