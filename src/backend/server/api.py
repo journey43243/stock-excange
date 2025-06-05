@@ -8,7 +8,7 @@ from pydantic import UUID4
 from models import Transaction, L2OrderBook, Level, Instrument, UserRole, User, NewUser, \
     CreateOrderResponse, LimitOrderBody, MarketOrder, LimitOrder, MarketOrderBody, Ok
 import uvicorn
-from src.backend.database.orm import PublicORM, AuthORM, BalanceORM, AdminORM
+from src.backend.database.orm import PublicORM, AuthORM, BalanceORM, AdminORM, OrderORM
 
 
 async def verify_user_token(authorization: str = Header(...)):
@@ -98,10 +98,10 @@ class OrderCBV:
 
     # --- Order Endpoints ---
     @order_router.post("/order", response_model=CreateOrderResponse, tags=["order"])
-    async def create_order(self,
+    async def create_order(self, request: Request,
                            order: LimitOrderBody | MarketOrderBody):
-        """Создать ордер"""
-        return CreateOrderResponse(order_id="35b0884d-9a1d-47b0-91c7-eecf0ca56bc8")
+        query = await OrderORM.create_order(request.headers["Authorization"], order)
+        return CreateOrderResponse(order_id=query)
 
     @order_router.get("/order", response_model=List[LimitOrder | MarketOrder], tags=["order"])
     async def list_orders(self):

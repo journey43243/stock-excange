@@ -1,3 +1,4 @@
+import datetime
 import os
 import uuid
 
@@ -5,10 +6,11 @@ import jwt
 import sqlalchemy.exc
 from fastapi import HTTPException
 
-from src.backend.database.database import User, session_var, Instrument, Order, OrderBookLevel, Transaction, Balance
-from sqlalchemy import select, bindparam, insert, String, Integer, UUID, and_, update, delete
+from src.backend.database.database import User, session_var, Instrument, Order, OrderBookLevel, Transaction, Balance, \
+    OrderStatus
+from sqlalchemy import select, bindparam, insert, String, Integer, UUID, and_, update, delete, DECIMAL
 import hashlib
-from src.backend.server.models import NewUser, UserRole
+from src.backend.server.models import NewUser, UserRole, LimitOrderBody
 
 
 class PublicORM:
@@ -146,6 +148,46 @@ class AdminORM:
                 await session.commit()
         return temp
 
+
+class OrderORM:
+
+    @classmethod
+    async def create_order(cls, api_key, order_model):
+        stmt = select(User.id).where(User.api_key == bindparam("token", type_=String()))
+        async with session_var() as session:
+            query = await session.execute(stmt, {"token": api_key})
+        user_id = query.scalars().first()
+        stmt = select(Balance.amount).where(and_(Balance.user_id == user_id, Balance.ticker == order_model.ticker))
+        async with session_var() as session:
+            query = await session.execute(stmt)
+        amount = query.scalars().one_or_none()
+        if amount is None or order_model.qry - amount < 0:
+            raise HTTPException(status_code=422)
+        order_id = uuid.uuid4()
+        if isinstance(order_model, LimitOrderBody):
+            stmt = insert(Order).values([{"id": order_id, "status": OrderStatus.NEW,
+                                          "timestamp": datetime.datetime.utcnow(),
+                                          "direction": order_model.direction.value,
+                                          "qty": order_model.qty,
+                                          "price": order_model.price,
+                                          "user_id": user_id,
+                                          "ticker": order_model.ticker}])
+            async with session_var() as session:
+                await session.execute(stmt)
+                await session.commit()
+        else:
+            stmt = insert(Order).values([{"id": order_id, "status": OrderStatus.NEW,
+                                          "timestamp": datetime.datetime.utcnow(),
+                                          "direction": order_model.direction.value,
+                                          "qty": order_model.qty,
+                                          "price": None,
+                                          "user_id": user_id,
+                                          "ticker": order_model.ticker}])
+            async with session_var() as session:
+                await session.execute(stmt)
+                await session.commit()
+
+        return order_id
 
 class AuthORM:
     @classmethod
