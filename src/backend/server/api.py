@@ -32,12 +32,16 @@ class CBV:
 
     @router.get("/public/instrument", response_model=List[Instrument], tags=["public"])
     async def list_instruments(self):
-        """Список доступных инструментов"""
-        return [Instrument(name="Memcoin", ticker="MEMCOIN")]
+        response = []
+        for i in await UserORM.select_instruments():
+            response.append(Instrument(name=i.name, ticker=i.ticker))
+        return response
 
     @router.get("/public/orderbook/{ticker}", response_model=L2OrderBook, tags=["public"])
     async def get_orderbook(self, ticker: str, limit: int = 10):
-        """Текущие заявки"""
+        response = []
+        for i in await UserORM.select_active_orders():
+            response.append(Level(price=i.cost, qty=i.quantity))
         return L2OrderBook(
             bid_levels=[Level(price=100, qty=5)],
             ask_levels=[Level(price=105, qty=3)]

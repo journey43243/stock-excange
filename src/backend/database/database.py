@@ -1,14 +1,19 @@
-import uuid
-from typing import List
+from uuid import UUID, uuid4
+from datetime import datetime
+from enum import Enum
+from typing import List, Optional
 
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, Boolean, Integer, DECIMAL, ForeignKey
-from sqlalchemy import UUID as UUID1
+from sqlalchemy import (
+    Column, String, Boolean, Integer, Float,
+    DateTime, ForeignKey, DECIMAL, Enum as SQLEnum, MetaData
+)
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.ext.declarative import declarative_base
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from sqlalchemy import MetaData
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from uuid import UUID
+
+from src.backend.server.models import UserRole
 
 
 class Settings(BaseSettings):
@@ -45,28 +50,110 @@ metadata = MetaData()
 class Base(DeclarativeBase):
     pass
 
+
+class OrderStatus(str, Enum):
+    NEW = "NEW"
+    EXECUTED = "EXECUTED"
+    PARTIALLY_EXECUTED = "PARTIALLY_EXECUTED"
+    CANCELLED = "CANCELLED"
+
+
+class Direction(str, Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+
+
 class User(Base):
     __tablename__ = "user_account"
 
-    id: Mapped[UUID] = mapped_column(UUID1(as_uuid=True),primary_key=True, default=uuid.uuid4)
-    username: Mapped[str] = mapped_column(String(64), unique=True)
-    password: Mapped[str] = mapped_column(String(64))
-    token: Mapped[str] = mapped_column(String(128))
-    role: Mapped[str] = mapped_column(String(6))
-    orders: Mapped[List["Order"]] = relationship(back_populates="user")
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(64))
+    password_hash: Mapped[str] = mapped_column(String(128))  # Хэш пароля
+    api_key: Mapped[str] = mapped_column(String(64), unique=True)
+    role: Mapped[UserRole] = mapped_column(SQLEnum(UserRole), default=UserRole.USER)
 
-class Order(Base):
-    __tablename__ = "order"
+    # Связи
+    orders: Mapped[List["Order"]] = relationship("Order", back_populates="user")
+    balances: Mapped[List["Balance"]] = relationship("Balance", back_populates="user")
 
-    id: Mapped[UUID] = mapped_column(UUID1(as_uuid=True),primary_key=True, default=uuid.uuid4)
-    status: Mapped[bool] = mapped_column(Boolean())
-    type: Mapped[int] = mapped_column(Integer())
-    cost: Mapped[float] = mapped_column(DECIMAL())
-    user_id = mapped_column(ForeignKey("user_account.id"))
-    user: Mapped["User"] = relationship("User", back_populates="orders")
 
 class Instrument(Base):
     __tablename__ = "instrument"
 
-    ticker: Mapped[str] = mapped_column(primary_key=True, default=uuid.uuid4)
+    ticker: Mapped[str] = mapped_column(String(10), primary_key=True)  # Например "MEMCOIN"
     name: Mapped[str] = mapped_column(String(64))
+
+    # Связи
+    orders: Mapped[List["Order"]] = relationship("Order", back_populates="instrument")
+    transactions: Mapped[List["Transaction"]] = relationship("Transaction", back_populates="instrument")
+
+
+class Balance(Base):
+    __tablename__ = "balance"
+
+    user_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("user_account.id"), primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker"), primary_key=True)
+    amount: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Связи
+    user: Mapped["User"] = relationship("User", back_populates="balances")
+    instrument: Mapped["Instrument"] = relationship("Instrument")
+
+
+
+class Order(Base):
+    __tablename__ = "order"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    status: Mapped[OrderStatus] = mapped_column(SQLEnum(OrderStatus), default=OrderStatus.NEW)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    filled: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Общие поля для всех типов ордеров
+    direction: Mapped[Direction] = mapped_column(SQLEnum(Direction))
+    qty: Mapped[int] = mapped_column(Integer)
+
+    # Поля для лимитного ордера
+    price: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # Внешние ключи
+    user_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("user_account.id"))
+    ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker"))
+
+    # Связи
+    user: Mapped["User"] = relationship("User", back_populates="orders")
+    instrument: Mapped["Instrument"] = relationship("Instrument", back_populates="orders")
+    transactions: Mapped[List["Transaction"]] = relationship("Transaction", back_populates="order")
+
+
+class Transaction(Base):
+    __tablename__ = "transaction"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    amount: Mapped[int] = mapped_column(Integer)
+    price: Mapped[int] = mapped_column(Integer)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Внешние ключи
+    ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker"))
+    order_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("order.id"))
+
+    # Связи
+    instrument: Mapped["Instrument"] = relationship("Instrument", back_populates="transactions")
+    order: Mapped["Order"] = relationship("Order", back_populates="transactions")
+
+
+class OrderBookLevel(Base):
+    __tablename__ = "order_book_level"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    price: Mapped[int] = mapped_column(Integer)
+    qty: Mapped[int] = mapped_column(Integer)
+    is_bid: Mapped[bool] = mapped_column(Boolean)  # True для bid, False для ask
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Внешний ключ
+    ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker"))
+
+    # Связь
+    instrument: Mapped["Instrument"] = relationship("Instrument")
