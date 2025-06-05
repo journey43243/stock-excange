@@ -2,19 +2,18 @@ import os
 from datetime import datetime
 from typing import List, Optional, Dict
 
-from fastapi import FastAPI, APIRouter, Header, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, Header, HTTPException, Depends, Request
 from fastapi_restful.cbv import cbv
 from pydantic import UUID4
 from models import Transaction, L2OrderBook, Level, Instrument, UserRole, User, NewUser, \
     CreateOrderResponse, LimitOrderBody, MarketOrder, LimitOrder, MarketOrderBody, Ok
 import uvicorn
-from src.backend.database.orm import PublicORM, verify_token_orm
-
+from src.backend.database.orm import PublicORM, AuthORM, BalanceORM
 
 
 async def verify_user_token(authorization: str = Header(...)):
     if authorization:
-        res = await verify_token_orm(authorization)
+        res = await AuthORM.verify_token_orm(authorization)
         if res:
             return True
         raise HTTPException(status_code=401)
@@ -80,9 +79,10 @@ class BalanceCBV:
 
     # --- Balance Endpoints ---
     @balance_router.get("/balance", tags=["balance"])
-    async def get_balances(self) -> Dict[str, int]:
+    async def get_balances(self, request: Request) -> Dict[str, int]:
         """Получить балансы"""
-        return {"MEMCOIN": 0, "DODGE": 100500}
+        balance = await BalanceORM.get_balance(request.headers["Authorization"])
+        return {i.ticker: i.amount for i in balance}
 
 
 @cbv(order_router)
@@ -148,6 +148,7 @@ class AdminCBV:
                       amount: int,
                       authorization: Optional[str] = Header(None)):
         """Пополнение баланса"""
+
         return Ok()
 
     @admin_router.post("/admin/balance/withdraw", response_model=Ok, tags=["admin", "balance"])
