@@ -115,7 +115,7 @@ class OrderCBV:
 
     @order_router.delete("/order/{order_id}", response_model=Ok, tags=["order"])
     async def cancel_order(self, order_id: UUID4):
-        """Отменить ордер"""
+        await OrderORM.cancel_order(order_id)
         return Ok()
 
 

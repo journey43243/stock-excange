@@ -194,6 +194,29 @@ class OrderORM:
 
         return order_id
 
+    @classmethod
+    async def cancel_order(cls, order_id):
+        stmt = select(Order).where(Order.id == order_id)
+        async with session_var() as session:
+            query = await session.execute(stmt)
+        order = query.scalars().one_or_none()
+        if order is None:
+            raise HTTPException(status_code=422)
+
+        stmt = delete(Order).where(Order.id == order_id)
+        async with session_var() as session:
+            await session.execute(stmt)
+            await session.commit()
+        if order.direction == Direction.SELL:
+            stmt = select(Balance.amount).where(and_(Balance.user_id == order.user_id, Balance.ticker == order.ticker))
+            async with session_var() as session:
+                query = await session.execute(stmt)
+            amount = query.scalars().first()
+            stmt = update(Balance).where(and_(Balance.user_id == order.user_id, Balance.ticker == order.ticker)).values(amount=amount + order.qty)
+            async with session_var() as session:
+                await session.execute(stmt)
+                await session.commit()
+
 class AuthORM:
     @classmethod
     async def verify_token_orm(cls, token):
