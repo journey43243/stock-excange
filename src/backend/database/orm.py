@@ -201,7 +201,7 @@ class OrderORM:
             query = await session.execute(stmt)
         order = query.scalars().one_or_none()
         if order is None:
-            raise HTTPException(status_code=422)
+            raise HTTPException(status_code=404)
 
         stmt = delete(Order).where(Order.id == order_id)
         async with session_var() as session:
@@ -223,6 +223,16 @@ class OrderORM:
         async with session_var() as session:
             query = await session.execute(stmt)
         return query.scalars()
+
+    @classmethod
+    async def get_order(cls, order_id):
+        stmt = select(Order).where(Order.id == order_id)
+        async with session_var() as session:
+            query = await session.execute(stmt)
+        order = query.scalars().one_or_none()
+        if order is None:
+            raise HTTPException(status_code=404)
+        return order
 
 class AuthORM:
     @classmethod

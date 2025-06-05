@@ -125,8 +125,18 @@ class OrderCBV:
         return response
     @order_router.get("/order/{order_id}", response_model=LimitOrder | MarketOrder, tags=["order"])
     async def get_order(self, order_id: UUID4):
-        """Получить ордер"""
-        raise HTTPException(status_code=404, detail="Order not found")
+        order = await OrderORM.get_order(order_id)
+        if getattr(order, "price") and order.price is not None:
+            attrs = {c.key: getattr(order, c.key) for c in inspect(order).mapper.column_attrs}
+            body = LimitOrderBody(**attrs)
+            attrs["body"] = body
+            entry = LimitOrder(**attrs)
+        else:
+            attrs = {c.key: getattr(order, c.key) for c in inspect(order).mapper.column_attrs}
+            body = MarketOrderBody(**attrs)
+            attrs["body"] = body
+            entry = MarketOrder(**attrs)
+        return entry
 
     @order_router.delete("/order/{order_id}", response_model=Ok, tags=["order"])
     async def cancel_order(self, order_id: UUID4):
