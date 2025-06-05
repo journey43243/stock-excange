@@ -2,12 +2,13 @@ import uuid
 from typing import List
 
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import UUID, String, Boolean, Integer, DECIMAL, ForeignKey
+from sqlalchemy import String, Boolean, Integer, DECIMAL, ForeignKey
+from sqlalchemy import UUID as UUID1
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
+from uuid import UUID
 
 
 class Settings(BaseSettings):
@@ -47,8 +48,8 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "user_account"
 
-    id: Mapped[str] = mapped_column(UUID(), primary_key=True, default=uuid.uuid4())
-    username: Mapped[str] = mapped_column(String(64))
+    id: Mapped[UUID] = mapped_column(UUID1(as_uuid=True),primary_key=True, default=uuid.uuid4)
+    username: Mapped[str] = mapped_column(String(64), unique=True)
     password: Mapped[str] = mapped_column(String(64))
     token: Mapped[str] = mapped_column(String(128))
     role: Mapped[str] = mapped_column(String(6))
@@ -57,10 +58,15 @@ class User(Base):
 class Order(Base):
     __tablename__ = "order"
 
-    id: Mapped[str] = mapped_column(UUID(), primary_key=True, default=uuid.uuid4())
+    id: Mapped[UUID] = mapped_column(UUID1(as_uuid=True),primary_key=True, default=uuid.uuid4)
     status: Mapped[bool] = mapped_column(Boolean())
     type: Mapped[int] = mapped_column(Integer())
     cost: Mapped[float] = mapped_column(DECIMAL())
     user_id = mapped_column(ForeignKey("user_account.id"))
     user: Mapped["User"] = relationship("User", back_populates="orders")
 
+class Instrument(Base):
+    __tablename__ = "instrument"
+
+    ticker: Mapped[str] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(64))

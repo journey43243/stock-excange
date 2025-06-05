@@ -33,6 +33,6 @@ class UserORM:
                                      "id": uuid_id}])
         async with session_var() as session:
             await session.execute(stmt, {"username": user.name, "password": hashlib.sha256(user.password.encode()).hexdigest(),
-                                         "role": UserRole.USER})
+                                         "role": UserRole.ADMIN})
             await session.commit()
         return user, token, uuid_id
