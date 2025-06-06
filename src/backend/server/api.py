@@ -1,6 +1,4 @@
-import os
-from datetime import datetime
-from typing import List, Optional, Dict
+from typing import List, Dict
 
 from fastapi import FastAPI, APIRouter, Header, HTTPException, Depends, Request
 from fastapi_restful.cbv import cbv
@@ -29,7 +27,7 @@ async def verify_admin_token(authorization: str = Header(...)):
         raise HTTPException(status_code=401)
 
 
-app = FastAPI()
+app = FastAPI(debug=False)
 public_router = APIRouter(prefix='/api/v1')
 balance_router = APIRouter(prefix='/api/v1', dependencies=[Depends(verify_user_token)])
 order_router = APIRouter(prefix='/api/v1', dependencies=[Depends(verify_user_token)])
@@ -102,6 +100,8 @@ class OrderCBV:
     @order_router.post("/order", response_model=CreateOrderResponse, tags=["order"])
     async def create_order(self, request: Request,
                            order: LimitOrderBody | MarketOrderBody):
+        if order.ticker is None:
+            order.ticker = "RUB"
         query = await OrderORM.create_order(request.headers["Authorization"], order)
         return CreateOrderResponse(order_id=query)
 

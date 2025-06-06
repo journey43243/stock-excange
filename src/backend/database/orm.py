@@ -161,10 +161,15 @@ class OrderORM:
         async with session_var() as session:
             query = await session.execute(stmt)
         amount = query.scalars().one_or_none()
-        if (amount is None or amount - order_model.qry < 0) and order_model.direction == Direction.SELL:
+        if amount is None and order_model.direction == Direction.BUY:
+            stmt = insert(Balance).values(user_id=user_id, ticker=order_model.ticker, amount=0)
+            async with session_var() as session:
+                await session.execute(stmt)
+        elif amount is None or (amount - order_model.qry < 0 and order_model.direction == Direction.SELL):
             raise HTTPException(status_code=422)
         else:
-            stmt = update(Balance).where(and_(Balance.user_id == user_id, Balance.ticker == order_model.ticker)).values(amount=amount-order_model.qty)
+            stmt = update(Balance).where(and_(Balance.user_id == user_id, Balance.ticker == order_model.ticker)).values(
+                amount=amount - order_model.qty)
             async with session_var() as session:
                 await session.execute(stmt)
                 await session.commit()
@@ -212,7 +217,8 @@ class OrderORM:
             async with session_var() as session:
                 query = await session.execute(stmt)
             amount = query.scalars().first()
-            stmt = update(Balance).where(and_(Balance.user_id == order.user_id, Balance.ticker == order.ticker)).values(amount=amount + order.qty)
+            stmt = update(Balance).where(and_(Balance.user_id == order.user_id, Balance.ticker == order.ticker)).values(
+                amount=amount + order.qty)
             async with session_var() as session:
                 await session.execute(stmt)
                 await session.commit()
@@ -234,6 +240,7 @@ class OrderORM:
             raise HTTPException(status_code=404)
         return order
 
+
 class AuthORM:
     @classmethod
     async def verify_token_orm(cls, token):
@@ -244,7 +251,7 @@ class AuthORM:
 
     @classmethod
     async def verify_admin_token_orm(cls, token):
-        stmt = select(User).where(and_(User.api_key == bindparam("api_key")), User.role == UserRole.ADMIN)
+        stmt = select(User).where(and_(User.api_key == bindparam("api_key"), User.role == UserRole.ADMIN))
         async with session_var() as session:
             query = await session.execute(stmt, {"api_key": token})
         return query.scalars().one_or_none()

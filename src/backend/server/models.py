@@ -57,14 +57,14 @@ class Transaction(BaseModel):
 
 class LimitOrderBody(BaseModel):
     direction: Direction
-    ticker: str
+    ticker: str | None
     qty: int
     price: int
 
 
 class MarketOrderBody(BaseModel):
     direction: Direction
-    ticker: str
+    ticker: str | None
     qty: int
 
 
