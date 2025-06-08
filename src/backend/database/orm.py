@@ -30,7 +30,7 @@ class PublicORM:
             async with session_var() as session:
                 await session.execute(stmt, {"name": user.name,
                                              "password_hash": hashlib.sha256(user.password.encode()).hexdigest(),
-                                             "role": UserRole.ADMIN})
+                                             "role": UserRole.USER})
                 await session.commit()
             return user, token, uuid_id
         except sqlalchemy.exc.IntegrityError:
@@ -38,6 +38,7 @@ class PublicORM:
 
     @classmethod
     async def select_instruments(cls):
+
         stmt = select(Instrument)
         async with session_var() as session:
             query = await session.execute(stmt)

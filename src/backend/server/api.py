@@ -13,7 +13,7 @@ from src.backend.database.orm import PublicORM, AuthORM, BalanceORM, AdminORM, O
 
 async def verify_user_token(authorization: str = Header(...)):
     if authorization:
-        res = await AuthORM.verify_token_orm(authorization)
+        res = await AuthORM.verify_token_orm(authorization[6:])
         if res:
             return True
         raise HTTPException(status_code=401)
@@ -21,7 +21,7 @@ async def verify_user_token(authorization: str = Header(...)):
 
 async def verify_admin_token(authorization: str = Header(...)):
     if authorization:
-        res = await AuthORM.verify_admin_token_orm(authorization)
+        res = await AuthORM.verify_admin_token_orm(authorization[6:])
         if res:
             return True
         raise HTTPException(status_code=401)
@@ -195,4 +195,4 @@ app.include_router(balance_router)
 app.include_router(order_router)
 
 if __name__ == "__main__":
-    uvicorn.run("src.backend.server.api:app", host='0.0.0.0', port=8000, reload=True)
+    uvicorn.run("src.backend.server.api:app", host='0.0.0.0', port=80, reload=True)

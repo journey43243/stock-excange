@@ -1,3 +1,4 @@
+import os
 from uuid import UUID, uuid4
 from datetime import datetime
 from enum import Enum
@@ -14,21 +15,23 @@ from sqlalchemy.ext.declarative import declarative_base
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.backend.server.models import UserRole
+import dotenv
 
+dotenv.load_dotenv("src/config/.env")
 
 class Settings(BaseSettings):
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
-    POSTGRES_PORT: int
-    POSTGRES_HOST: str
-    POSTGRES_DB: str
+    POSTGRES_USER: str = os.environ.get("POSTGRES_USER")
+    POSTGRES_PASSWORD: str = os.environ.get("POSTGRES_PASSWORD")
+    POSTGRES_PORT: int = os.environ.get("POSTGRES_PORT")
+    POSTGRES_HOST: str = os.environ.get("POSTGRES_HOST")
+    POSTGRES_DB: str = os.environ.get("POSTGRES_DB")
 
     @property
     def DATABASE_URL_psycopg(self):
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}" + \
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
-    model_config = SettingsConfigDict(env_file="src/config/.env", extra="ignore")
+    #model_config = SettingsConfigDict(env_file="src/config/.env", extra="ignore")
 
 
 settings = Settings()
@@ -79,7 +82,7 @@ class User(Base):
 class Instrument(Base):
     __tablename__ = "instrument"
 
-    ticker: Mapped[str] = mapped_column(String(10), primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(64))
 
     orders: Mapped[List["Order"]] = relationship("Order", back_populates="instrument")
