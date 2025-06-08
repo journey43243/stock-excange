@@ -6,7 +6,7 @@ from pydantic import UUID4
 from sqlalchemy import inspect
 
 from models import Transaction, L2OrderBook, Level, Instrument, UserRole, User, NewUser, \
-    CreateOrderResponse, LimitOrderBody, MarketOrder, LimitOrder, MarketOrderBody, Ok, Direction
+    CreateOrderResponse, LimitOrderBody, MarketOrder, LimitOrder, MarketOrderBody, Ok, Direction, Deposit, Withdraw
 import uvicorn
 from src.backend.database.orm import PublicORM, AuthORM, BalanceORM, AdminORM, OrderORM
 
@@ -42,6 +42,7 @@ class PublicCBV:
     async def register(self, new_user: NewUser):
         """Регистрация пользователя"""
         # Реализация регистрации
+        print(new_user)
         user = await PublicORM.registration(new_user)
         return User(
             id=user[2],
@@ -89,7 +90,7 @@ class BalanceCBV:
     @balance_router.get("/balance", tags=["balance"])
     async def get_balances(self, request: Request) -> Dict[str, int]:
         """Получить балансы"""
-        balance = await BalanceORM.get_balance(request.headers["Authorization"])
+        balance = await BalanceORM.get_balance(request.headers["Authorization"][6:])
         return {i.ticker: i.amount for i in balance}
 
 
@@ -102,7 +103,7 @@ class OrderCBV:
                            order: LimitOrderBody | MarketOrderBody):
         if order.ticker is None:
             order.ticker = "RUB"
-        query = await OrderORM.create_order(request.headers["Authorization"], order)
+        query = await OrderORM.create_order(request.headers["Authorization"][6:], order)
         return CreateOrderResponse(order_id=query)
 
     @order_router.get("/order", response_model=List[LimitOrder | MarketOrder], tags=["order"])
@@ -171,21 +172,15 @@ class AdminCBV:
         return Ok()
 
     @admin_router.post("/admin/balance/deposit", response_model=Ok, tags=["admin", "balance"])
-    async def deposit(self,
-                      user_id: UUID4,
-                      ticker: str,
-                      amount: int):
-        await AdminORM.do_deposit(user_id, ticker, amount)
+    async def deposit(self, deposit: Deposit):
+        await AdminORM.do_deposit(Deposit.user_id, Deposit.ticker, Deposit.amount)
 
         return Ok()
 
     @admin_router.post("/admin/balance/withdraw", response_model=Ok, tags=["admin", "balance"])
-    async def withdraw(self,
-                       user_id: UUID4,
-                       ticker: str,
-                       amount: int):
+    async def withdraw(self, withdraw: Withdraw):
         """Вывод средств"""
-        await AdminORM.do_withdraw(user_id, ticker, amount)
+        await AdminORM.do_withdraw(withdraw.user_id, withdraw.ticker, withdraw.amount)
         return Ok()
 
 

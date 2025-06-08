@@ -16,6 +16,18 @@ class OrderStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 
+class Deposit(BaseModel):
+    user_id: str
+    ticker: str
+    amount: int
+
+
+class Withdraw(BaseModel):
+    user_id: str
+    ticker: str
+    amount: int
+
+
 class UserRole(str, Enum):
     USER = "USER"
     ADMIN = "ADMIN"
@@ -23,7 +35,6 @@ class UserRole(str, Enum):
 
 class NewUser(BaseModel):
     name: str
-    password: str
 
 
 class User(BaseModel):

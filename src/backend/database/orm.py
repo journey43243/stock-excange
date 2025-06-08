@@ -29,7 +29,7 @@ class PublicORM:
         try:
             async with session_var() as session:
                 await session.execute(stmt, {"name": user.name,
-                                             "password_hash": hashlib.sha256(user.password.encode()).hexdigest(),
+                                             "password_hash": '1',
                                              "role": UserRole.USER})
                 await session.commit()
             return user, token, uuid_id
@@ -86,6 +86,7 @@ class AdminORM:
             stmt = select(Instrument).where(Instrument.ticker == bindparam("ticker", type_=String()))
             query = await session.execute(stmt, {"ticker": ticker})
             instrument = query.scalars().one_or_none()
+            print(instrument, user, ticker)
             if instrument is None or user is None:
                 raise HTTPException(status_code=422)
             stmt = select(Balance).where(

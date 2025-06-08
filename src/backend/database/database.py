@@ -69,9 +69,9 @@ class User(Base):
     __tablename__ = "user_account"
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
-    name: Mapped[str] = mapped_column(String(64))
-    password_hash: Mapped[str] = mapped_column(String(128))
-    api_key: Mapped[str] = mapped_column(String(256), unique=True)
+    name: Mapped[str] = mapped_column(String(512))
+    password_hash: Mapped[str] = mapped_column(String(512))
+    api_key: Mapped[str] = mapped_column(String(512), unique=True)
     role: Mapped[UserRole] = mapped_column(SQLEnum(UserRole), default=UserRole.USER)
 
     orders: Mapped[List["Order"]] = relationship("Order", back_populates="user")
