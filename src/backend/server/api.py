@@ -173,7 +173,7 @@ class AdminCBV:
 
     @admin_router.post("/admin/balance/deposit", response_model=Ok, tags=["admin", "balance"])
     async def deposit(self, deposit: Deposit):
-        await AdminORM.do_deposit(Deposit.user_id, Deposit.ticker, Deposit.amount)
+        await AdminORM.do_deposit(deposit.user_id, deposit.ticker, deposit.amount)
 
         return Ok()
 
