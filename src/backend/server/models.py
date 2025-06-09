@@ -17,13 +17,13 @@ class OrderStatus(str, Enum):
 
 
 class Deposit(BaseModel):
-    user_id: str
+    user_id: UUID4
     ticker: str
     amount: int
 
 
 class Withdraw(BaseModel):
-    user_id: str
+    user_id: UUID4
     ticker: str
     amount: int
 

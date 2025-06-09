@@ -79,25 +79,29 @@ class AdminORM:
     @classmethod
     async def do_deposit(cls, user_id, ticker, amount):
         async with session_var() as session:
-            stmt = select(User).where(User.id == bindparam("id", type_=UUID))
-            query = await session.execute(stmt, {"id": user_id})
+            stmt = select(User).where(User.id == user_id)
+            query = await session.execute(stmt)
             user = query.scalars().one_or_none()
 
             stmt = select(Instrument).where(Instrument.ticker == bindparam("ticker", type_=String()))
             query = await session.execute(stmt, {"ticker": ticker})
             instrument = query.scalars().one_or_none()
-            print(instrument, user, ticker)
-            if instrument is None or user is None:
-                raise HTTPException(status_code=422)
+            if instrument is None and ticker=="RUB":
+                stmt = insert(Instrument).values(ticker=ticker, name=ticker)
+                await session.execute(stmt)
+                await session.commit()
+                raise HTTPException(status_code=404, detail="Instrument not found")
+            if user is None:
+                raise HTTPException(status_code=404, detail="User not found")
             stmt = select(Balance).where(
-                and_(Balance.user_id == bindparam("user_id", type_=UUID), Balance.ticker == bindparam("ticker")))
-            query = await session.execute(stmt, {"user_id": user_id, "ticker": ticker})
+                and_(Balance.user_id == user_id, Balance.ticker == bindparam("ticker")))
+            query = await session.execute(stmt, {"ticker": ticker})
             user = query.scalars().first()
             if user is None:
                 stmt = insert(Balance).values(
-                    [{"user_id": bindparam("user_id", type_=UUID), "ticker": bindparam("ticker"),
+                    [{"user_id": user_id, "ticker": bindparam("ticker"),
                       "amount": bindparam("amount")}])
-                await session.execute(stmt, {"user_id": user_id, "ticker": ticker, "amount": amount})
+                await session.execute(stmt, {"ticker": ticker, "amount": amount})
             else:
                 stmt = update(Balance).where(
                     and_(Balance.user_id == user.user_id, Balance.ticker == user.ticker)).values(
@@ -108,9 +112,9 @@ class AdminORM:
     @classmethod
     async def do_withdraw(cls, user_id, ticker, amount):
         async with session_var() as session:
-            stmt = select(Balance).where(and_(Balance.user_id == bindparam("user_id", type_=UUID),
+            stmt = select(Balance).where(and_(Balance.user_id == user_id,
                                               Balance.ticker == bindparam("ticker", type_=String())))
-            query = await session.execute(stmt, {"user_id": user_id, "ticker": ticker})
+            query = await session.execute(stmt, {"ticker": ticker})
             temp = query.scalars().first()
             if temp and temp.amount - amount >= 0:
                 stmt = update(Balance).where(
@@ -141,12 +145,12 @@ class AdminORM:
 
     @classmethod
     async def delete_user(cls, user_id):
-        stmt = select(User).where(User.id == bindparam("id", type_=UUID))
+        stmt = select(User).where(User.id == user_id)
         async with session_var() as session:
-            user = await session.execute(stmt, {"id": user_id})
+            user = await session.execute(stmt)
             if temp := user.scalars().one_or_none():
-                stmt = delete(User).where(User.id == bindparam("id", type_=UUID))
-                await session.execute(stmt, {"id": user_id})
+                stmt = delete(User).where(User.id == user_id)
+                await session.execute(stmt)
                 await session.commit()
         return temp
 
@@ -167,7 +171,7 @@ class OrderORM:
             stmt = insert(Balance).values(user_id=user_id, ticker=order_model.ticker, amount=0)
             async with session_var() as session:
                 await session.execute(stmt)
-        elif amount is None or (amount - order_model.qry < 0 and order_model.direction == Direction.SELL):
+        elif amount is None or (amount - order_model.qty < 0 and order_model.direction == Direction.SELL):
             raise HTTPException(status_code=422)
         else:
             stmt = update(Balance).where(and_(Balance.user_id == user_id, Balance.ticker == order_model.ticker)).values(
@@ -239,7 +243,7 @@ class OrderORM:
             query = await session.execute(stmt)
         order = query.scalars().one_or_none()
         if order is None:
-            raise HTTPException(status_code=404)
+            raise HTTPException(status_code=404, detail="Order not found")
         return order
 
 
