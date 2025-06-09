@@ -128,7 +128,7 @@ class Transaction(Base):
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     amount: Mapped[int] = mapped_column(Integer)
     price: Mapped[int] = mapped_column(Integer)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker", ondelete="CASCADE"))
     order_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("order.id"))
@@ -144,7 +144,7 @@ class OrderBookLevel(Base):
     price: Mapped[int] = mapped_column(Integer)
     qty: Mapped[int] = mapped_column(Integer)
     is_bid: Mapped[bool] = mapped_column(Boolean)  # True для bid, False для ask
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     ticker: Mapped[str] = mapped_column(String(10), ForeignKey("instrument.ticker", ondelete="CASCADE"))
 

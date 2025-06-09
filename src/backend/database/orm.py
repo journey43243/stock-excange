@@ -8,7 +8,7 @@ from fastapi import HTTPException
 
 from src.backend.database.database import User, session_var, Instrument, Order, OrderBookLevel, Transaction, Balance, \
     OrderStatus
-from sqlalchemy import select, bindparam, insert, String, Integer, UUID, and_, update, delete, DECIMAL
+from sqlalchemy import select, bindparam, insert, String, Integer, UUID, and_, update, delete, DECIMAL, desc
 import hashlib
 from src.backend.server.models import NewUser, UserRole, LimitOrderBody, Direction
 
@@ -46,11 +46,19 @@ class PublicORM:
 
     @classmethod
     async def select_orderbook(cls, ticker, limit):
-        stmt = select(OrderBookLevel).where(OrderBookLevel.ticker == bindparam("ticker", type_=String())).limit(
+        stmt_bid = select(OrderBookLevel).where(and_(
+            OrderBookLevel.ticker == bindparam("ticker", type_=String()), OrderBookLevel.is_bid is True)).order_by(
+            OrderBookLevel.price).limit(
+            bindparam("limit", type_=Integer()))
+        stmt_ack = select(OrderBookLevel).where(and_(
+            OrderBookLevel.ticker == bindparam("ticker", type_=String()), OrderBookLevel.is_bid is False)).order_by(
+            desc(
+                OrderBookLevel.price)).limit(
             bindparam("limit", type_=Integer()))
         async with session_var() as session:
-            query = await session.execute(stmt, {"limit": int(limit), "ticker": ticker})
-        return query.scalars()
+            query1 = await session.execute(stmt_bid, {"limit": int(limit), "ticker": ticker})
+            query2 = await session.execute(stmt_ack, {"limit": int(limit), "ticker": ticker})
+        return query1.scalars(), query2.scalars()
 
     @classmethod
     async def transactions(cls, ticker, limit):
@@ -187,6 +195,11 @@ class OrderORM:
                                           "price": order_model.price,
                                           "user_id": user_id,
                                           "ticker": order_model.ticker}])
+            async with session_var() as session:
+                await session.execute(stmt)
+                await session.commit()
+            stmt = insert(OrderBookLevel).values(price=order_model.price, qty=order_model.qty, ticker=order_model.ticker,
+                                                 is_bid=True if order_model.direction.value == Direction.BUY else False)
             async with session_var() as session:
                 await session.execute(stmt)
                 await session.commit()

@@ -61,13 +61,9 @@ class PublicCBV:
 
     @public_router.get("/public/orderbook/{ticker}", response_model=L2OrderBook, tags=["public"])
     async def get_orderbook(self, ticker: str, limit=10):
-        bid_levels = []
-        ask_levels = []
-        for i in await PublicORM.select_orderbook(ticker, limit):
-            if i.is_bid:
-                bid_levels.append(Level(price=i.cost, qty=i.qty))
-            else:
-                ask_levels.append(Level(price=i.cost, qty=i.qty))
+        query = await PublicORM.select_orderbook(ticker, limit)
+        bid_levels = [Level(price=i.cost, qty=i.qty) for i in query[0]]
+        ask_levels = [Level(price=i.cost, qty=i.qty) for i in query[1]]
         return L2OrderBook(
             bid_levels=bid_levels,
             ask_levels=ask_levels
@@ -79,7 +75,7 @@ class PublicCBV:
         return [Transaction(
             ticker=i.ticker,
             amount=i.amount,
-            price=i.ptice,
+            price=i.price,
             timestamp=i.timestamp
         ) for i in await PublicORM.transactions(ticker, limit)]
 
@@ -180,8 +176,9 @@ class AdminCBV:
 
     @admin_router.post("/admin/instrument", response_model=Ok, tags=["admin"])
     async def add_instrument(self,
-                             instrument: Instrument):
-        await AdminORM.add_instrument(instrument.ticker, instrument.name)
+                             instrument: List[Instrument]):
+        for instr in instrument:
+            await AdminORM.add_instrument(instr.ticker, instr.name)
         return Ok()
 
     @admin_router.delete("/admin/instrument/{ticker}", response_model=Ok, tags=["admin"])
