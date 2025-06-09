@@ -1,12 +1,13 @@
 from typing import List, Dict
-
+import re
 from fastapi import FastAPI, APIRouter, Header, HTTPException, Depends, Request
 from fastapi_restful.cbv import cbv
 from pydantic import UUID4
 from sqlalchemy import inspect
 
 from models import Transaction, L2OrderBook, Level, Instrument, UserRole, User, NewUser, \
-    CreateOrderResponse, LimitOrderBody, MarketOrder, LimitOrder, MarketOrderBody, Ok, Direction, Deposit, Withdraw
+    CreateOrderResponse, LimitOrderBody, MarketOrder, LimitOrder, MarketOrderBody, Ok, Direction, Deposit, Withdraw, \
+    OrderStatus
 import uvicorn
 from src.backend.database.orm import PublicORM, AuthORM, BalanceORM, AdminORM, OrderORM
 
@@ -16,7 +17,7 @@ async def verify_user_token(authorization: str = Header(...)):
         res = await AuthORM.verify_token_orm(authorization[6:])
         if res:
             return True
-        raise HTTPException(status_code=401)
+    raise HTTPException(status_code=401)
 
 
 async def verify_admin_token(authorization: str = Header(...)):
@@ -24,7 +25,7 @@ async def verify_admin_token(authorization: str = Header(...)):
         res = await AuthORM.verify_admin_token_orm(authorization[6:])
         if res:
             return True
-        raise HTTPException(status_code=401)
+    raise HTTPException(status_code=401)
 
 
 app = FastAPI(debug=False)
@@ -124,20 +125,37 @@ class OrderCBV:
                 entry = MarketOrder(**attrs)
                 response.append(entry)
         return response
+
     @order_router.get("/order/{order_id}", response_model=LimitOrder | MarketOrder, tags=["order"])
     async def get_order(self, order_id: UUID4):
         order = await OrderORM.get_order(order_id)
-        if getattr(order, "price") and order.price is not None:
-            attrs = {c.key: getattr(order, c.key) for c in inspect(order).mapper.column_attrs}
-            body = LimitOrderBody(**attrs)
-            attrs["body"] = body
-            entry = LimitOrder(**attrs)
+        base_attrs = {
+            "id": order.id,
+            "status": OrderStatus.EXECUTED if order.filled >= order.qty else OrderStatus.PARTIALLY_EXECUTED,
+            "user_id": order.user_id,
+            "timestamp": order.timestamp,
+            "filled": order.filled
+        }
+        if order.price is not None:
+            print(order.__dict__)
+            body = LimitOrderBody(
+                direction=order.direction,
+                ticker=order.ticker,
+                qty=order.qty,
+                price=order.price
+            )
+            return LimitOrder(**base_attrs, body=body)
         else:
-            attrs = {c.key: getattr(order, c.key) for c in inspect(order).mapper.column_attrs}
-            body = MarketOrderBody(**attrs)
-            attrs["body"] = body
-            entry = MarketOrder(**attrs)
-        return entry
+            body = MarketOrderBody(
+                direction=order.direction,
+                ticker=order.ticker,
+                qty=order.qty
+            )
+            del base_attrs["filled"]
+            return MarketOrder(
+                **base_attrs,
+                body=body
+            )
 
     @order_router.delete("/order/{order_id}", response_model=Ok, tags=["order"])
     async def cancel_order(self, order_id: UUID4):

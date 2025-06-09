@@ -1,12 +1,12 @@
 import os
 from uuid import UUID, uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
 
 from sqlalchemy import (
     Column, String, Boolean, Integer, Float,
-    DateTime, ForeignKey, DECIMAL, Enum as SQLEnum, MetaData
+    DateTime, ForeignKey, DECIMAL, Enum as SQLEnum, MetaData, TIMESTAMP, func
 )
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
@@ -106,7 +106,7 @@ class Order(Base):
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     status: Mapped[OrderStatus] = mapped_column(SQLEnum(OrderStatus), default=OrderStatus.NEW)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     filled: Mapped[int] = mapped_column(Integer, default=0)
 
     direction: Mapped[Direction] = mapped_column(SQLEnum(Direction))

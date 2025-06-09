@@ -86,7 +86,7 @@ class AdminORM:
             stmt = select(Instrument).where(Instrument.ticker == bindparam("ticker", type_=String()))
             query = await session.execute(stmt, {"ticker": ticker})
             instrument = query.scalars().one_or_none()
-            if instrument is None and ticker=="RUB":
+            if instrument is None and ticker == "RUB":
                 stmt = insert(Instrument).values(ticker=ticker, name=ticker)
                 await session.execute(stmt)
                 await session.commit()
@@ -180,9 +180,8 @@ class OrderORM:
                 await session.execute(stmt)
                 await session.commit()
         order_id = uuid.uuid4()
-        if isinstance(order_model, LimitOrderBody):
+        if "price" in order_model.model_fields:
             stmt = insert(Order).values([{"id": order_id, "status": OrderStatus.NEW,
-                                          "timestamp": datetime.datetime.utcnow(),
                                           "direction": order_model.direction.value,
                                           "qty": order_model.qty,
                                           "price": order_model.price,
@@ -193,7 +192,6 @@ class OrderORM:
                 await session.commit()
         else:
             stmt = insert(Order).values([{"id": order_id, "status": OrderStatus.NEW,
-                                          "timestamp": datetime.datetime.utcnow(),
                                           "direction": order_model.direction.value,
                                           "qty": order_model.qty,
                                           "price": None,

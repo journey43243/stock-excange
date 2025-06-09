@@ -1,7 +1,8 @@
-from pydantic import BaseModel, UUID4
+from pydantic import BaseModel, UUID4, Field
 from typing import List
 from enum import Enum
 from datetime import datetime
+from typing_extensions import Annotated
 
 
 class Direction(str, Enum):
@@ -46,7 +47,7 @@ class User(BaseModel):
 
 class Instrument(BaseModel):
     name: str
-    ticker: str
+    ticker: Annotated[str, Field(pattern='^[A-Z]{2,10}$')]
 
 
 class Level(BaseModel):
