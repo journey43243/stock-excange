@@ -198,8 +198,6 @@ class OrderORM:
             async with session_var() as session:
                 await session.execute(stmt)
                 await session.commit()
-            stmt = insert(OrderBookLevel).values(price=order_model.price, qty=order_model.qty, ticker=order_model.ticker,
-                                                 is_bid=True if order_model.direction.value == Direction.BUY else False)
             async with session_var() as session:
                 await session.execute(stmt)
                 await session.commit()

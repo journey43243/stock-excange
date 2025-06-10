@@ -1,5 +1,5 @@
+import asyncio
 from typing import List, Dict
-import re
 from fastapi import FastAPI, APIRouter, Header, HTTPException, Depends, Request
 from fastapi_restful.cbv import cbv
 from pydantic import UUID4
@@ -42,8 +42,7 @@ class PublicCBV:
     @public_router.post("/public/register", response_model=User, tags=["public"])
     async def register(self, new_user: NewUser):
         """Регистрация пользователя"""
-        # Реализация регистрации
-        print(new_user)
+
         user = await PublicORM.registration(new_user)
         return User(
             id=user[2],
@@ -127,13 +126,12 @@ class OrderCBV:
         order = await OrderORM.get_order(order_id)
         base_attrs = {
             "id": order.id,
-            "status": OrderStatus.EXECUTED if order.filled >= order.qty else OrderStatus.PARTIALLY_EXECUTED,
+            "status": OrderStatus,
             "user_id": order.user_id,
             "timestamp": order.timestamp,
             "filled": order.filled
         }
         if order.price is not None:
-            print(order.__dict__)
             body = LimitOrderBody(
                 direction=order.direction,
                 ticker=order.ticker,
@@ -176,9 +174,12 @@ class AdminCBV:
 
     @admin_router.post("/admin/instrument", response_model=Ok, tags=["admin"])
     async def add_instrument(self,
-                             instrument: List[Instrument]):
-        for instr in instrument:
-            await AdminORM.add_instrument(instr.ticker, instr.name)
+                             instrument: List[Instrument] | Instrument):
+        if isinstance(instrument, list):
+            for instr in instrument:
+                await AdminORM.add_instrument(instr.ticker, instr.name)
+        else:
+            await AdminORM.add_instrument(instrument.ticker, instrument.name)
         return Ok()
 
     @admin_router.delete("/admin/instrument/{ticker}", response_model=Ok, tags=["admin"])
